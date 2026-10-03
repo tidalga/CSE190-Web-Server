@@ -4,3 +4,4 @@ Lib/
 Include/
 pyvenv.cfg
 __pycache__
+server.txt
