@@ -43,22 +43,22 @@ def displayHistory():
 
 
 # ---- Helper functions ---- #
-def getUserIDFromCookies(cookies):
+def getUserIDFromCookies(cookies: dict[str, str]) -> str | None:
     id = None
     if ("boogle_id" in cookies):
-        print("getUserIDFromCookies: id found in cookies")
         id = cookies["boogle_id"]
+        print("getUserIDFromCookies: id = " + id)
     
     return id
 
 # Adding user search query to database
-def addSearchQuery(id: str, query: str):
+def addSearchQuery(id: str, query: str) -> None:
     # TODO create database
     # TODO implement adding to database
     print("Added " + query + " for " + id)
 
 # Fetching data of a specific user
-def getUserHistory(id: str):
+def getUserHistory(id: str | None) -> dict:
     # Add user searches into dictionary
     if id is None:
         print("getUserHistory: Hardcoding default history")
@@ -79,4 +79,5 @@ def getUserHistory(id: str):
     
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="8000")
+    print("does this work")
+    app.run(host="0.0.0.0", port=8000)
