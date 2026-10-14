@@ -1,9 +1,10 @@
 from flask import Flask, render_template, request, make_response, redirect
 import uuid
-import json 
-from datetime import datetime
+import json
+import psycopg
 
 app = Flask(__name__)
+CONNECT_STR = ""
 
 # ---- Route decorator calls ---- #
 
@@ -11,11 +12,18 @@ app = Flask(__name__)
 def index():
     # create response object with HTML page
     resp = make_response(render_template("boogle.html"))
+    id = request.cookies.get("boogle_id")
     # set boogle_id cookie if doesn't already exist
-    if request.cookies.get("boogle_id") == None:
+    if id == None:
         id = uuid.uuid4()
         resp.set_cookie("boogle_id", str(id), 999999999, None, "/", None, False, False, "Lax")
+        # Add user to clients database
+        initializeClient(str(id))
+    else:
+        # Update last seen for client
+        updateClient(str(id))
     
+    addRequest(request)
     return resp
 
 @app.route("/jsontest")
@@ -23,20 +31,17 @@ def returnJSONTest():
     resp = {
         "data": "I am in CSE190/CSE291!"
     }
+    addRequest(request)
     return resp
 
 @app.route("/search")
 def search():
     query = request.args["q"]
     if (query != ""):
-        time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S:%fZ")
-        query = {
-            "query": query,
-            "ts": time
-        }
-        addSearchQuery(request.cookies["boogle_id"], query)
+        addSearchQuery(request)
     
-    return redirect("/")
+    addRequest(request)
+    return redirect("/", 303)
 
 @app.route("/api/history")
 def displayHistory():
@@ -44,15 +49,72 @@ def displayHistory():
     id = request.cookies.get("boogle_id")
     # Fetch python dictionary of user seraches by boogle_id
     userHistory = getUserHistory(id)
+    addRequest(request)
     return userHistory
 
+@app.route("/dump")
+def returnDump():
+    # Implement to use dump
+    resp = {
+        "clients": [
+            {"client_id": "id"}
+        ]
+    }
+    return resp
 
 # ---- Helper functions ---- #
-# Adding user search query to database
-def addSearchQuery(id: str, query: dict) -> None:
-    # TODO create database
-    # TODO implement adding to database
-    print("Added " + query["query"] + " for " + id + " at " + query["ts"])
+def addRequest(request) -> None:
+    # Connect to database
+    with psycopg.connect(CONNECT_STR) as conn:
+        # Initialize cursor for interacting with database
+        with conn.cursor() as cur:
+            # Insert request values into requests table
+            id = request.cookies["boogle_id"]
+            values = {
+                "id": id, "ip": request.access_route[0], "referer": request.referrer, "path": request.path
+            }
+            cur.execute("""
+                INSERT INTO requests (client_id, ts, ip, referer, path)
+                VALUES (%(id)s, DEFAULT, %(ip)s, %(referer)s, %(path)s)
+            """, values)
+            conn.commit()
+
+def initializeClient(id: str):
+    with psycopg.connect(CONNECT_STR) as conn:
+        # Initialize cursor for interacting with database
+        with conn.cursor() as cur:
+            # Add new row for client
+            cur.execute("""
+                INSERT INTO clients (client_id, first_seen, last_seen) VALUES (%s, DEFAULT, DEFAULT)
+            """, (id,))
+            conn.commit()
+
+def updateClient(id: str):
+    # Updating last seen of client
+    with psycopg.connect(CONNECT_STR) as conn:
+        with conn.cursor() as cur:
+            # Update value in table
+            cur.execute("""
+                UPDATE clients 
+                SET last_seen = DEFAULT
+                WHERE client_id = %(client_id)s
+            """, {"client_id": id})
+            conn.commit()
+
+
+def addSearchQuery(request):
+    # Adding user search query to database
+    print("Adding search into searches table")
+    # with psycopg.connect(CONNECT_STR) as conn:
+        
+    #         # Initialize cursor for interacting with database
+    #         with conn.cursor() as cur:
+    #             # Add search into searches table
+    #             cur.execute("""
+    #                 INSERT INTO clients (client_id, first_seen, last_seen) VALUES (%s, DEFAULT, DEFAULT)
+    #             """, (id,))
+    #             conn.commit()
+
 
 # Fetching data of a specific user
 def getUserHistory(id: str | None) -> dict:
@@ -74,4 +136,9 @@ def getUserHistory(id: str | None) -> dict:
     
 
 if __name__ == "__main__":
+    # Initializing db connection info
+    with open("connection_info.txt", "r") as file:
+        CONNECT_STR = file.readline()
+        file.close()
+
     app.run(host="0.0.0.0", port=8000)
