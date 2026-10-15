@@ -4,7 +4,9 @@
 CREATE TABLE IF NOT EXISTS clients (
     client_id   UUID PRIMARY KEY,
     first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
+    last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    latest_ip   TEXT,
+    ips         TEXT []
 );
 
 CREATE TABLE IF NOT EXISTS requests (

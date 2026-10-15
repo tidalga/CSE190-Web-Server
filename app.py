@@ -18,10 +18,10 @@ def index():
         id = uuid.uuid4()
         resp.set_cookie("boogle_id", str(id), 999999999, None, "/", None, False, False, "Lax")
         # Add user to clients database
-        initializeClient(str(id))
+        initializeClient(str(id), request)
     else:
         # Update last seen for client
-        updateClient(str(id))
+        updateClient(request)
     
     addRequest(request)
     return resp
@@ -83,26 +83,50 @@ def addRequest(request) -> None:
             """, values)
             conn.commit()
 
-def initializeClient(id: str):
+def initializeClient(id: str, request):
     with psycopg.connect(CONNECT_STR) as conn:
         # Initialize cursor for interacting with database
         with conn.cursor() as cur:
             # Add new row for client
+            latest_ip = str(request.access_route[0])
+            ips = [latest_ip]
             cur.execute("""
-                INSERT INTO clients (client_id, first_seen, last_seen) VALUES (%s, DEFAULT, DEFAULT)
-            """, (id,))
+                INSERT INTO clients (client_id, first_seen, last_seen, latest_ip, ips) VALUES (%s, DEFAULT, DEFAULT, %s, %s)
+            """, (id, latest_ip, ips))
             conn.commit()
 
-def updateClient(id: str):
+def updateClient(request):
     # Updating last seen of client
     with psycopg.connect(CONNECT_STR) as conn:
         with conn.cursor() as cur:
-            # Update value in table
+            # Fetch information from request
+            id = request.cookies.get("boogle_id")
+            latest_ip = str(request.access_route[0]) # array of client IPs
+            # Fetch array of previously used IPs
+            cur.execute("""
+                SELECT * FROM clients WHERE client_id = %s
+            """, (id,))
+            row = cur.fetchone()
+            ips = None
+            if row:
+                # Fetch array of previous IPs
+                ips = row[4]
+                addToList = True
+                # Check if IP already exists
+                for ip in ips:
+                    if (ip == latest_ip):
+                        addToList = False
+                        break
+                if addToList:
+                    ips.append(latest_ip)
+            # Update values in table
             cur.execute("""
                 UPDATE clients 
-                SET last_seen = DEFAULT
+                SET last_seen = DEFAULT,
+                latest_ip = %(latest_ip)s,
+                ips = %(ips)s
                 WHERE client_id = %(client_id)s
-            """, {"client_id": id})
+            """, {"latest_ip": latest_ip, "client_id": id, "ips": ips})
             conn.commit()
 
 
@@ -165,4 +189,4 @@ if __name__ == "__main__":
         CONNECT_STR = file.readline()
         file.close()
 
-    app.run(host="0.0.0.0", port=8000, debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=True)
