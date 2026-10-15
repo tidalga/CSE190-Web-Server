@@ -17,7 +17,7 @@ def index():
         id = uuid.uuid4()
         resp.set_cookie("boogle_id", str(id), 999999999, None, "/", None, False, False, "Lax")
         # Add user to clients database
-        initializeClient(str(id), request)
+        addClient(str(id), request)
     else:
         # Update last seen for client
         updateClient(request)
@@ -36,8 +36,8 @@ def returnJSONTest():
 @app.route("/search")
 def search():
     addRequest(request)
-    query = request.args["q"]
-    if (query.strip() != ""):
+    query = request.args.get("q")
+    if (query is not None and query.strip() != ""):
         addSearchQuery(request)
     
     return redirect("/", 303)
@@ -83,7 +83,7 @@ def addRequest(request) -> None:
             """, values)
             conn.commit()
 
-def initializeClient(id: str, request):
+def addClient(id: str, request):
     with psycopg.connect(CONNECT_STR) as conn:
         # Initialize cursor for interacting with database
         with conn.cursor() as cur:
@@ -152,7 +152,7 @@ def addSearchQuery(request):
             # Insert query to searches
             cur.execute("""
                 INSERT INTO searches (client_id, request_id, query, ts) VALUES (%s, %s, %s, %s)
-            """, (id, request_id, request.args["q"].strip(), currTime()))
+            """, (id, request_id, request.args["q"], currTime()))
             conn.commit()
 
 
@@ -199,8 +199,8 @@ def getDump() -> dict:
                 # Fetch info of each user frin row
                 client = {
                     "client_id": row[0],
-                    "first_seen": row[1],
-                    "last_seen": row[2],
+                    "first_seen": str(row[1]),
+                    "last_seen": str(row[2]),
                     "latest_ip": row[3],
                     "ips": row[4],
                     "searches": userHistory.get("searches")
