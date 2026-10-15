@@ -7,7 +7,6 @@ app = Flask(__name__)
 CONNECT_STR = ""
 
 # ---- Route decorator calls ---- #
-
 @app.route("/")
 def index():
     # create response object with HTML page
@@ -55,13 +54,8 @@ def displayHistory():
 @app.route("/dump")
 def returnDump():
     addRequest(request)
-    # Implement to use dump
-    resp = {
-        "clients": [
-            {"client_id": "id"}
-        ]
-    }
-    return resp
+    dump = getDump()
+    return dump
 
 # ---- Helper functions ---- #
 def addRequest(request) -> None:
@@ -156,7 +150,6 @@ def addSearchQuery(request):
 
 # Fetching data of a specific user
 def getUserHistory(id: str | None) -> dict:
-    # TODO change to fetch from database
     data = {
         "client_id": "",
         "searches": []
@@ -167,7 +160,7 @@ def getUserHistory(id: str | None) -> dict:
             with conn.cursor() as cur:
                 # Select searches by client_id
                 cur.execute("""
-                    SELECT * FROM searches WHERE client_id = %s
+                    SELECT * FROM searches WHERE client_id = %s ORDER BY request_id DESC
                 """, (id,))
 
                 # Add each search to searches array of data dictionary
@@ -181,7 +174,38 @@ def getUserHistory(id: str | None) -> dict:
                 conn.commit()
 
     return data
-    
+
+def getDump() -> dict:
+    dump = {
+        "clients": []
+    }
+    # Add info of each client
+    with psycopg.connect(CONNECT_STR) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM clients")
+            row = cur.fetchone()
+
+            while (row):
+                # Get history data of user
+                userHistory = getUserHistory(row[0])
+                # Fetch info of each user frin row
+                client = {
+                    "client_id": row[0],
+                    "first_seen": row[1],
+                    "last_seen": row[2],
+                    "latest_ip": row[3],
+                    "ips": row[4],
+                    "searches": userHistory.get("searches")
+                }
+                dump["clients"].append(client)
+                row = cur.fetchone()
+
+            cur.close()
+            conn.commit()
+                
+
+    return dump
+
 
 if __name__ == "__main__":
     # Initializing db connection info
