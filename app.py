@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, make_response, redirect
 import uuid
-import json
+from datetime import datetime
 import psycopg
 
 app = Flask(__name__)
@@ -37,7 +37,7 @@ def returnJSONTest():
 def search():
     addRequest(request)
     query = request.args["q"]
-    if (query != ""):
+    if (query.strip() != ""):
         addSearchQuery(request)
     
     return redirect("/", 303)
@@ -58,6 +58,11 @@ def returnDump():
     return dump
 
 # ---- Helper functions ---- #
+def currTime() -> str:
+    #return datetime.now().strftime("%Y-%m-%dT%H:%M:%S:%fZ")
+    time = str(datetime.now())
+    return time
+
 def addRequest(request) -> None:
     # Don't add request if id not initialized yet
     if request.cookies.get("boogle_id") == None:
@@ -68,12 +73,13 @@ def addRequest(request) -> None:
         with conn.cursor() as cur:
             # Insert request values into requests table
             id = request.cookies.get("boogle_id")
+            time = currTime()
             values = {
-                "id": id, "ip": request.access_route[0], "referer": request.referrer, "path": request.path
+                "id": id, "ip": request.access_route[0], "time": time, "referer": request.referrer, "path": request.path
             }
             cur.execute("""
                 INSERT INTO requests (client_id, ts, ip, referer, path)
-                VALUES (%(id)s, DEFAULT, %(ip)s, %(referer)s, %(path)s)
+                VALUES (%(id)s, %(time)s, %(ip)s, %(referer)s, %(path)s)
             """, values)
             conn.commit()
 
@@ -82,11 +88,12 @@ def initializeClient(id: str, request):
         # Initialize cursor for interacting with database
         with conn.cursor() as cur:
             # Add new row for client
+            time = currTime()
             latest_ip = str(request.access_route[0])
             ips = [latest_ip]
             cur.execute("""
-                INSERT INTO clients (client_id, first_seen, last_seen, latest_ip, ips) VALUES (%s, DEFAULT, DEFAULT, %s, %s)
-            """, (id, latest_ip, ips))
+                INSERT INTO clients (client_id, first_seen, last_seen, latest_ip, ips) VALUES (%(id)s, %(time)s, %(time)s, %(latest_ip)s, %(ips)s)
+            """, {"id": id, "time": time, "latest_ip": latest_ip, "ips": ips})
             conn.commit()
 
 def updateClient(request):
@@ -114,13 +121,14 @@ def updateClient(request):
                 if addToList:
                     ips.append(latest_ip)
             # Update values in table
+            time = currTime()
             cur.execute("""
                 UPDATE clients 
-                SET last_seen = DEFAULT,
+                SET last_seen = %(time)s,
                 latest_ip = %(latest_ip)s,
                 ips = %(ips)s
                 WHERE client_id = %(client_id)s
-            """, {"latest_ip": latest_ip, "client_id": id, "ips": ips})
+            """, {"time": time, "latest_ip": latest_ip, "client_id": id, "ips": ips})
             conn.commit()
 
 
@@ -143,8 +151,8 @@ def addSearchQuery(request):
                 request_id = row[0] # 1st column in schema
             # Insert query to searches
             cur.execute("""
-                INSERT INTO searches (client_id, request_id, query, ts) VALUES (%s, %s, %s, DEFAULT)
-            """, (id, request_id, request.args["q"]))
+                INSERT INTO searches (client_id, request_id, query, ts) VALUES (%s, %s, %s, %s)
+            """, (id, request_id, request.args["q"].strip(), currTime()))
             conn.commit()
 
 
@@ -168,7 +176,7 @@ def getUserHistory(id: str | None) -> dict:
                 for row in rows:
                     data["searches"].append({
                         "query": row[3],
-                        "ts": row[4]
+                        "ts": str(row[4]) # Object is a datetime object, use now() and convert to str
                     })
 
                 conn.commit()
