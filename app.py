@@ -217,7 +217,7 @@ def getDump() -> dict:
 
 if __name__ == "__main__":
     # Initializing db connection info
-    with open("connection_info.txt", "r") as file:
+    with open("part1/connection_info.txt", "r") as file:
         CONNECT_STR = file.readline()
         file.close()
 

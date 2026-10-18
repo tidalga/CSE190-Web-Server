@@ -2,5 +2,8 @@
 .vscode/
 venv
 __pycache__
+part2/
+part3/
+part4/
 *.txt
 !requirements.txt
