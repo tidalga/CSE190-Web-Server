@@ -137,25 +137,27 @@ def fitModel(matrix):
 def reverseMap(key: str, value):
     return str(REVERSE_MAPPING[key][value])
 
-def savePredictions():
+def savePredictions(users: pd.DataFrame):
     # Write labels to file
     with open("predictions.csv", "w") as file:
         # Create initial first line and write it
-        labelLine = []
+        labelLine = [users.columns.to_list()[0]]
         for key in MAPPINGS.keys():
             labelLine.append(key)
         result = ",".join(labelLine)
         file.write(result + "\n")
 
         # Iterate through each user
+        userIdList = users["client_id"].to_list()
         for i in range(predictions["gender"].size):
+            # Get client_id from users
+            id = userIdList[i]
             # Iterate through each attribute
-            labelLine = []
+            labelLine = [str(id)]
             for key in predictions:
                 label = reverseMap(key, predictions[key][i])
                 labelLine.append(label)
             result = ",".join(labelLine)
-            print(result)
             file.write(result + "\n")
 
         file.close()
@@ -185,10 +187,9 @@ def predictLabels(vectorizer: TfidfVectorizer, users: pd.DataFrame):
     # Make prediction of each attribute, add to dict
     for key in MAPPINGS.keys():
         predictions[key] = models[key].predict(matrix)
-        print(predictions[key])
 
     # Write predictions into csv file
-    savePredictions()
+    savePredictions(users)
     
 if __name__ == "__main__":
     vectorizer = TfidfVectorizer()
