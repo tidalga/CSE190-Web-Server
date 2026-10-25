@@ -34,24 +34,6 @@ MAPPINGS = {
 }
 
 REVERSE_MAPPING = {
-    "gender": {"male": 0, "female": 1, "unknown": 2},
-    "age": {"18-24": 0, "25-34": 1, "35-44": 2, "45-54": 3, "55-64": 4, "65+": 5},
-    "education": {"high_school": 0, "some_college": 1, "bachelors": 2, "graduate": 3},
-    "household_income": {
-        "top_10": 0, "11_20": 1, "21_30": 2, "31_40": 3, "41_50": 4, "lower_50": 5, "unknown": 6
-    },
-    "industry": {
-        "tech": 0, "healthcare": 1, "education": 2, "finance": 3, "retail": 4, "construction": 5, "hospitality": 6, "transport": 7, "government": 8, "manufacturing": 9, "arts_media": 10, "other": 11, "not_applicable": 12
-    },
-    "employment_status": {
-        "employed_ft": 0, "employed_pt": 1, "self_employed": 2, "unemployed": 3, "student": 4, "retired": 5
-    },
-    "employer_size": {"solo": 0, "small_1_49": 1, "mid_50_999": 2, "large_1000_plus": 3, "not_applicable": 4},
-    "home_ownership": {"own": 0, "rent": 1, "other": 2},
-    "parental_status": {"parent": 0, "not_parent": 1}
-}
-
-REVERSE_MAPPING = {
     "gender": {0: "male", 1: "female", 2: "unknown"},
     "age": {0: "18-24", 1: "25-34", 2: "35-44", 3: "45-54", 4: "55-64", 5: "65+"},
     "education": {0: "high_school", 1: "some_college", 2: "bachelors", 3: "graduate"},
@@ -110,29 +92,27 @@ def prepUserData(users: pd.DataFrame) -> list[str]:
     return allSearches
 
 # Helper function for fitting model
+def saveItem(item, itemName: str):
+    with open(itemName + ".pkl", "wb") as file:
+        pickle.dump(item, file)
+
+def loadIfSaved(itemName: str):
+    try:
+        loadedItem = None
+        with open(itemName + ".pkl", "rb") as file:
+            loadedItem = pickle.load(file)
+        print("Loaded " + itemName + " from file")
+        return loadedItem
+    
+    except FileNotFoundError:
+        return None
+
 def fitModel(matrix):
     for key in MAPPINGS.keys():
         print("Training model for " + key)
         model = LogisticRegression()
         model.fit(matrix, labels[key])
         models[key] = model
-
-# def saveModel(vectorizer: TfidfVectorizer):
-#     with open("tfidf_vectorizer.pkl", "wb") as file:
-#         pickle.dump(vectorizer, file)
-
-# def loadModelIfSaved(vectorizer: TfidfVectorizer):
-#     try:
-#         loadedVectorizer = None
-#         with open("tfidf_vectorizer.pkl", "rb") as file:
-#             loadedVectorizer = pickle.load(file)
-#         print("Loaded vectorizer from file")
-
-#         # Populate models dictionary with
-#         return loadedVectorizer
-    
-#     except FileNotFoundError:
-#         return None
 
 def reverseMap(key: str, value):
     return str(REVERSE_MAPPING[key][value])
@@ -152,11 +132,13 @@ def savePredictions(users: pd.DataFrame):
         for i in range(predictions["gender"].size):
             # Get client_id from users
             id = userIdList[i]
-            # Iterate through each attribute
+            # Initially populate array with id
             labelLine = [str(id)]
+            # Iterate through each attribute and add to array
             for key in predictions:
                 label = reverseMap(key, predictions[key][i])
                 labelLine.append(label)
+            # Convert array to 
             result = ",".join(labelLine)
             file.write(result + "\n")
 
@@ -174,10 +156,9 @@ def trainModel(vectorizer: TfidfVectorizer, users: pd.DataFrame, labels: pd.Data
     matrix = vectorizer.fit_transform(allSearches)
     # Fit a model for each of the 9 attributes
     fitModel(matrix)
-
-def updateModel(vectorizer: TfidfVectorizer, users: pd.DataFrame, labels: pd.DataFrame):
-    print("-- Updating model... --")
-    #allSearches = prepUserData(users)
+    # Save models and vectorizer to  file
+    saveItem(models, "models")
+    saveItem(vectorizer, "tfidf_vectorizer")
 
 def predictLabels(vectorizer: TfidfVectorizer, users: pd.DataFrame):
     print("-- Predicting labels... --")
@@ -190,6 +171,8 @@ def predictLabels(vectorizer: TfidfVectorizer, users: pd.DataFrame):
 
     # Write predictions into csv file
     savePredictions(users)
+    # Return dictionary of each prediction
+    return predictions
     
 if __name__ == "__main__":
     vectorizer = TfidfVectorizer()
@@ -198,11 +181,8 @@ if __name__ == "__main__":
         print(f"{split}: {len(users)} users")
         print(users["client_id"])
         
-        if split != "test":
+        if split == "train":
             labels = load_labels(split)
-            if split == "train":
-                trainModel(vectorizer, users, labels)
-            else:
-                updateModel(vectorizer, users, labels)
-        else:
+            trainModel(vectorizer, users, labels)
+        elif split == "test":
             predictLabels(vectorizer, users)

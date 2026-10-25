@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, make_response, redirect
 import uuid
+import requests
 from datetime import datetime
 import psycopg
 
@@ -10,7 +11,7 @@ CONNECT_STR = ""
 @app.route("/")
 def index():
     # create response object with HTML page
-    resp = make_response(render_template("boogle.html"))
+    resp = make_response(render_template("new_boogle.html"))
     id = request.cookies.get("boogle_id")
     # set boogle_id cookie if doesn't already exist
     if id == None:
@@ -22,7 +23,7 @@ def index():
         # Update last seen for client
         updateClient(request)
     
-    addRequest(request)
+    #addRequest(request)
     return resp
 
 @app.route("/jsontest")
@@ -56,6 +57,11 @@ def returnDump():
     addRequest(request)
     dump = getDump()
     return dump
+
+@app.route("/ad")
+def getAd():
+    response = requests.get()
+    return "<body>hihi</body>"
 
 # ---- Helper functions ---- #
 def currTime() -> str:
@@ -217,7 +223,7 @@ def getDump() -> dict:
 
 if __name__ == "__main__":
     # Initializing db connection info
-    with open("part1/connection_info.txt", "r") as file:
+    with open("part2/connection_info.txt", "r") as file:
         CONNECT_STR = file.readline()
         file.close()
 
