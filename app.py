@@ -1,11 +1,15 @@
 from flask import Flask, render_template, request, make_response, redirect
+from datetime import datetime
 import uuid
 import requests
-from datetime import datetime
 import psycopg
+import sys
+
+import classifier as cs # type: ignore (fixed with path appending)
 
 app = Flask(__name__)
 CONNECT_STR = ""
+classifier = None
 
 # ---- Route decorator calls ---- #
 @app.route("/")
@@ -60,8 +64,20 @@ def returnDump():
 
 @app.route("/ad")
 def getAd():
-    response = requests.get()
-    return "<body>hihi</body>"
+    #response = requests.get()
+    # Put user searches into array
+    # Generate labels for user using Classifier
+    # userData = {
+    #     "id": "b979802c-7489-42a2-ae5c-54f1c0b9256e",
+    #     "searches": [
+    #         "I like trains", "cheap clothes teenagers", "tips for dorm life"
+    #     ]
+    # }
+    # labels = classifier.generateLabels(userData=userData)
+    # print(labels)
+    # Format user segments for OpenRTB
+    # Display ad
+    return "hihi"
 
 # ---- Helper functions ---- #
 def currTime() -> str:
@@ -226,5 +242,7 @@ if __name__ == "__main__":
     with open("part2/connection_info.txt", "r") as file:
         CONNECT_STR = file.readline()
         file.close()
+
+    classifier = cs.Classifier()
 
     app.run(host="0.0.0.0", port=8000, debug=True)

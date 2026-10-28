@@ -10,6 +10,7 @@ Needs pandas (pip install pandas).
 from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
+from pathlib import Path
 import pickle
 import pandas as pd
 
@@ -96,16 +97,23 @@ def saveItem(item, itemName: str):
     with open(itemName + ".pkl", "wb") as file:
         pickle.dump(item, file)
 
-def loadIfSaved(itemName: str):
+def loadItem(itemName: str):
     try:
         loadedItem = None
-        with open(itemName + ".pkl", "rb") as file:
+        filePath = Path(__file__).resolve().parent.parent / "modelData" / (itemName + ".pkl")
+        with open(filePath, "rb") as file:
             loadedItem = pickle.load(file)
-        print("Loaded " + itemName + " from file")
+        
         return loadedItem
-    
+        
     except FileNotFoundError:
-        return None
+        raise Exception("File " + itemName + ".pkl not found") 
+
+def loadVectorizer(itemName: str) -> TfidfVectorizer:
+    return loadItem(itemName)
+
+def loadModels(itemName: str) -> dict[str, LogisticRegression]:
+    return loadItem(itemName)
 
 def fitModel(matrix):
     for key in MAPPINGS.keys():
@@ -114,8 +122,15 @@ def fitModel(matrix):
         model.fit(matrix, labels[key])
         models[key] = model
 
-def reverseMap(key: str, value):
+def reverseMap(key: str, value: int):
     return str(REVERSE_MAPPING[key][value])
+
+def remapPredictions(predictions: dict):
+    for label in predictions:
+        value = predictions.get(label)
+        if value is not None:
+            # Replaces value of list with single string
+            predictions[label] = reverseMap(label, value[0])
 
 def savePredictions(users: pd.DataFrame):
     # Write labels to file
@@ -148,7 +163,7 @@ def savePredictions(users: pd.DataFrame):
 # -- ACTUAL FUNCTIONS -- #
 # Function for initially training model using fit_transform
 def trainModel(vectorizer: TfidfVectorizer, users: pd.DataFrame, labels: pd.DataFrame):
-    print("-- Training model... --")
+    #print("-- Training model... --")
     # Iterate through each user and add query to list
     prepLabels(labels)
     allSearches = prepUserData(users)
@@ -160,17 +175,13 @@ def trainModel(vectorizer: TfidfVectorizer, users: pd.DataFrame, labels: pd.Data
     saveItem(models, "models")
     saveItem(vectorizer, "tfidf_vectorizer")
 
-def predictLabels(vectorizer: TfidfVectorizer, users: pd.DataFrame):
-    print("-- Predicting labels... --")
-    allSearches = prepUserData(users)
+def predictLabels(vectorizer: TfidfVectorizer, models: dict[str, LogisticRegression], allSearches: list[str]):
+    #print("-- Predicting labels... --")
     matrix = vectorizer.transform(allSearches)
 
     # Make prediction of each attribute, add to dict
     for key in MAPPINGS.keys():
         predictions[key] = models[key].predict(matrix)
-
-    # Write predictions into csv file
-    savePredictions(users)
     # Return dictionary of each prediction
     return predictions
     
@@ -185,4 +196,7 @@ if __name__ == "__main__":
             labels = load_labels(split)
             trainModel(vectorizer, users, labels)
         elif split == "test":
-            predictLabels(vectorizer, users)
+            allSearches = prepUserData(users)
+            predictLabels(vectorizer, models=models, allSearches=allSearches)
+            # Write predictions into csv file
+            savePredictions(users)
