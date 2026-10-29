@@ -1,9 +1,12 @@
 from flask import Flask, render_template, request, make_response, redirect
 from datetime import datetime
+from pathlib import Path
 import uuid
-import requests
 import psycopg
 import sys
+
+p3 = Path(__file__).resolve().parent / "part3"
+sys.path.append(str(p3))
 
 import classifier as cs # type: ignore (fixed with path appending)
 
@@ -63,27 +66,31 @@ def returnDump():
     return dump
 
 @app.route("/ad")
-def getAd():
-    #response = requests.get()
-    # Put user searches into array
-    # Generate labels for user using Classifier
-    # userData = {
-    #     "id": "b979802c-7489-42a2-ae5c-54f1c0b9256e",
-    #     "searches": [
-    #         "I like trains", "cheap clothes teenagers", "tips for dorm life"
-    #     ]
-    # }
-    # labels = classifier.generateLabels(userData=userData)
-    # print(labels)
+def displayAd():
+    # Fetch user history from database
+    userHistory = getUserHistory(request.cookies.get("boogle_id"))
+    # Format user searches into array
+    userHistoryArr = extractSearches(userHistory["searches"])
+    assert(classifier is not None)
+    labels = classifier.generateLabels(userHistoryArr)
     # Format user segments for OpenRTB
+    ad = " ".join(labels.values())
+    print(ad)
     # Display ad
-    return "hihi"
+    return ad
 
 # ---- Helper functions ---- #
 def currTime() -> str:
     #return datetime.now().strftime("%Y-%m-%dT%H:%M:%S:%fZ")
     time = str(datetime.now())
     return time
+
+def extractSearches(userHistory: list[dict]) -> list[str]:
+    searchesArr = []
+    for i in range(len(userHistory)):
+        searchesArr.append(userHistory[i]["query"])
+
+    return searchesArr
 
 def addRequest(request) -> None:
     # Don't add request if id not initialized yet

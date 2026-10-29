@@ -7,11 +7,11 @@ class Classifier:
         self.models: dict[str, LogisticRegression] = ld.loadModels("models")
         self.vectorizer: TfidfVectorizer  = ld.loadVectorizer("tfidf_vectorizer")
 
-    def generateLabels(self, userData: dict) -> dict[str, str]:
+    def generateLabels(self, searches: list[str]) -> dict[str, str]:
         # Combine searches into list of one string
-        searches = [" ".join(userData["searches"])]
+        combinedSearches = [" ".join(searches)]
         # Call predict labels
-        predictions = ld.predictLabels(self.vectorizer, self.models, searches)
+        predictions = ld.predictLabels(self.vectorizer, self.models, combinedSearches)
         # Remap predictions
         ld.remapPredictions(predictions)
 
