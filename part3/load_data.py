@@ -52,6 +52,54 @@ REVERSE_MAPPING = {
     "parental_status": {0: "parent", 1: "not_parent"}
 }
 
+SEGMENTS_MAPPING = {
+    "male": "101",
+    "female": "102",
+    "18-24": "201",
+    "25-34": "202",
+    "35-44": "203",
+    "45-54": "204",
+    "55-64": "205",
+    "65+": "206",
+    "high_school": "301",
+    "some_college": "302",
+    "bachelors": "303",
+    "graduate": "304",
+    "top_10": "401",
+    "11_20": "402",
+    "21_30": "403",
+    "31_40": "404",
+    "41_50": "405",
+    "lower_50": "406",
+    "tech": "501",
+    "healthcare": "502",
+    "education": "503",
+    "finance": "504",
+    "retail": "505",
+    "construction": "506",
+    "hospitality": "507",
+    "transport": "508",
+    "government": "509",
+    "manufacturing": "510",
+    "arts_media": "511",
+    "other": "512",
+    "not_applicable": "505",
+    "employed_ft": "601",
+    "employed_pt": "602",
+    "self_employed": "603",
+    "unemployed": "604",
+    "student": "605",
+    "retired": "606",
+    "solo": "701",
+    "small_1_49": "702",
+    "mid_50_999": "703",
+    "large_1000_plus": "704",
+    "own": "801",
+    "rent": "802",
+    "parent": "901",
+    "not_parent": "902"
+}
+
 models = {}
 predictions = {}
 
@@ -124,6 +172,9 @@ def fitModel(matrix):
 
 def reverseMap(key: str, value: int):
     return str(REVERSE_MAPPING[key][value])
+
+def segmentsMap(key: str):
+    return SEGMENTS_MAPPING[key]
 
 def remapPredictions(predictions: dict):
     for label in predictions:

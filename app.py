@@ -1,9 +1,12 @@
+import flask
 from flask import Flask, render_template, request, make_response, redirect
 from datetime import datetime
 from pathlib import Path
+import requests as rq
 import uuid
 import psycopg
 import sys
+import json
 
 p3 = Path(__file__).resolve().parent / "part3"
 sys.path.append(str(p3))
@@ -73,9 +76,12 @@ def displayAd():
     userHistoryArr = extractSearches(userHistory["searches"])
     assert(classifier is not None)
     labels = classifier.generateLabels(userHistoryArr)
-    # Format user segments for OpenRTB
-    ad = " ".join(labels.values())
-    print(ad)
+    # Remove 'unknown' labels, format into list
+    labelsArr = classifier.prepLabelsForRTB(labels)
+    # Format OpenRTB request
+    rtbRequest = formatRTBRequest(labelsArr, request)
+    # Handle request
+    ad = getAd(rtbRequest)
     # Display ad
     return ad
 
@@ -91,6 +97,69 @@ def extractSearches(userHistory: list[dict]) -> list[str]:
         searchesArr.append(userHistory[i]["query"])
 
     return searchesArr
+
+def formatRTBRequest(labels: list[str], request: flask.Request) -> str:
+    id = "6c1f0e0a9d6b4f51"
+    bidFloor = 0.5
+    rtbRequest = {
+        "id": id,
+        "imp": [{
+            "id": "1",
+            "tagid": "boogle-top",
+            "banner": {"format": [{"w": 300, "h": 250}]},
+            "bidfloor": bidFloor
+        }],
+        "device": {
+            "ua": request.user_agent.string,
+            "ip": request.access_route[0]
+        },
+        "user": {
+            "id": request.cookies.get("boogle_id"),
+            "data": [{
+                "id": "boogle",
+                "name": "boogle_inferred",
+                "segment": labels,
+                "ext": {"segtax": 500}
+            }]
+        },
+        "tmax": 250,
+        "badv": []
+    }
+    return json.dumps(rtbRequest)
+
+def makeRTBRequest(rtbRequest: str) -> list:
+    dsps = ["steady"]
+    #dsps = ["steady", "niche", "shady", "glitch"]
+    responses = []
+
+    for dsp in dsps:
+        response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, 5)
+        responses.append(response)
+
+    return responses
+
+def chooseAd(responses: list[rq.Response]) -> dict | None:
+    bestBid = None
+    
+    for resp in responses:
+        respDict = json.loads(resp.text)
+        seatBids = respDict.get("seatbid")
+        for seatBid in seatBids:
+            bidList = seatBid.get("bid")
+            for bid in bidList:
+                if (bestBid is None or bid.get("price") > bestBid.get("price")):
+                    bestBid = bid
+    
+    return bestBid 
+
+def getAd(rtbRequest: str):
+    responses = makeRTBRequest(rtbRequest)
+    bestBid = chooseAd(responses)
+    if (bestBid is not None):
+        ad = bestBid.get("adm")
+        return ad
+    else:
+        return None
 
 def addRequest(request) -> None:
     # Don't add request if id not initialized yet

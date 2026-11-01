@@ -16,3 +16,15 @@ class Classifier:
         ld.remapPredictions(predictions)
 
         return predictions
+
+    def prepLabelsForRTB(self, labels: dict[str, str]) -> list[dict[str, str]]:
+        prepedLabels = []
+
+        for attr in labels:
+            label = labels[attr]
+            if (label == "unknown"):
+                continue
+
+            prepedLabels.append({"id": ld.segmentsMap(label)})
+
+        return prepedLabels
