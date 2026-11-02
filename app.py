@@ -79,9 +79,10 @@ def displayAd():
     # Remove 'unknown' labels, format into list
     labelsArr = classifier.prepLabelsForRTB(labels)
     # Format OpenRTB request
-    rtbRequest = formatRTBRequest(labelsArr, request)
+    requestSpecs = getRTBRequestSpecs()
+    rtbRequest = formatRTBRequest(labelsArr, request, requestSpecs)
     # Handle request
-    ad = getAd(rtbRequest)
+    ad = getAd(rtbRequest, requestSpecs)
     # Display ad
     return ad
 
@@ -98,16 +99,23 @@ def extractSearches(userHistory: list[dict]) -> list[str]:
 
     return searchesArr
 
-def formatRTBRequest(labels: list[str], request: flask.Request) -> str:
-    id = "6c1f0e0a9d6b4f51"
-    bidFloor = 0.5
+def getRTBRequestSpecs() -> dict:
+    return {
+        "id": "6c1f0e0a9d6b4f51",
+        "impid": "1",
+        "bidFloor": 0.5,
+        "width": 300,
+        "height": 250
+    }
+
+def formatRTBRequest(labels: list[str], request: flask.Request, requestSpecs: dict) -> str:
     rtbRequest = {
-        "id": id,
+        "id": requestSpecs["id"],
         "imp": [{
-            "id": "1",
+            "id": requestSpecs["impid"],
             "tagid": "boogle-top",
             "banner": {"format": [{"w": 300, "h": 250}]},
-            "bidfloor": bidFloor
+            "bidfloor": requestSpecs["bidFloor"]
         }],
         "device": {
             "ua": request.user_agent.string,
@@ -128,35 +136,90 @@ def formatRTBRequest(labels: list[str], request: flask.Request) -> str:
     return json.dumps(rtbRequest)
 
 def makeRTBRequest(rtbRequest: str) -> list:
-    dsps = ["steady"]
-    #dsps = ["steady", "niche", "shady", "glitch"]
+    dsps = ["steady", "niche", "shady", "glitch"]
     responses = []
 
     for dsp in dsps:
-        response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, 5)
+        response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, 2.5)
+        if (response is None or response.status_code == 204):
+            continue # Don't add to array
         responses.append(response)
 
     return responses
 
-def chooseAd(responses: list[rq.Response]) -> dict | None:
+def isNewBestAd(bid, bestBid, requestSpecs: dict):
+    valid = True
+    # Perform validation checks
+    if (bid.get("w") != requestSpecs.get("width") or
+        bid.get("h") != requestSpecs.get("height") or
+        bid.get("impid") != requestSpecs.get("impid") or
+        bid.get("price") < requestSpecs.get("bidFloor") or
+        bid.get("price") <= bestBid.get("price")):
+        return False
+
+    return valid
+
+def chooseAd(responses: list[rq.Response], requestSpecs: dict) -> dict:
     bestBid = None
+    secondBest = None
     
     for resp in responses:
-        respDict = json.loads(resp.text)
+        try:
+            respDict = json.loads(resp.text)
+            print(respDict)
+        except:
+            # Ad format is invalid, skip
+            continue
+        # Check if currency is
+        if (respDict.get("cur") != "USD"):
+            continue
+        
         seatBids = respDict.get("seatbid")
         for seatBid in seatBids:
             bidList = seatBid.get("bid")
             for bid in bidList:
-                if (bestBid is None or bid.get("price") > bestBid.get("price")):
+                if (bestBid is None):
+                    bestBid = bid
+                elif (isNewBestAd(bid, bestBid, requestSpecs)):
+                    secondBest = bestBid
                     bestBid = bid
     
-    return bestBid 
+    return {
+        "bestBid": bestBid,
+        "secondBest": secondBest
+    } 
 
-def getAd(rtbRequest: str):
+def chargeAd(adPair: dict, requestSpecs: dict):
+    best = adPair["bestBid"]
+    secondBest = adPair["secondBest"]
+    bestPrice = 0
+    secondBestPrice = 0
+
+    if (best is None):
+        return
+    if (secondBest is not None):
+        secondBestPrice = secondBest.get("price")
+
+    bestPrice = best.get("price")
+    price = min(bestPrice, max(secondBestPrice, requestSpecs["bidFloor"]) + 0.01)
+    burl = adPair["bestBid"].get("burl")
+    # Remove price part from burl
+    burlList = burl.split("?")
+    print(burlList)
+    burl = burlList[0]
+    
+    print("Charing ad...")
+    response = rq.get(url=burl, params={"price": price})
+    print(response.url)
+    print(response.status_code)
+    
+
+def getAd(rtbRequest: str, requestSpecs: dict):
     responses = makeRTBRequest(rtbRequest)
-    bestBid = chooseAd(responses)
-    if (bestBid is not None):
-        ad = bestBid.get("adm")
+    bidPair = chooseAd(responses, requestSpecs)
+    if (bidPair["bestBid"] is not None):
+        ad = bidPair["bestBid"].get("adm")
+        chargeAd(bidPair, requestSpecs)
         return ad
     else:
         return None
