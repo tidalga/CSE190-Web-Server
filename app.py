@@ -140,21 +140,20 @@ def makeRTBRequest(rtbRequest: str) -> list:
     responses = []
 
     for dsp in dsps:
-        response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, 2.5)
+        response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, timeout=0.25)
         if (response is None or response.status_code == 204):
             continue # Don't add to array
         responses.append(response)
 
     return responses
 
-def isNewBestAd(bid, bestBid, requestSpecs: dict):
+def isValidAd(bid, requestSpecs: dict):
     valid = True
     # Perform validation checks
     if (bid.get("w") != requestSpecs.get("width") or
         bid.get("h") != requestSpecs.get("height") or
         bid.get("impid") != requestSpecs.get("impid") or
-        bid.get("price") < requestSpecs.get("bidFloor") or
-        bid.get("price") <= bestBid.get("price")):
+        bid.get("price") < requestSpecs.get("bidFloor")):
         return False
 
     return valid
@@ -166,7 +165,7 @@ def chooseAd(responses: list[rq.Response], requestSpecs: dict) -> dict:
     for resp in responses:
         try:
             respDict = json.loads(resp.text)
-            print(respDict)
+            #print(respDict)
         except:
             # Ad format is invalid, skip
             continue
@@ -178,11 +177,17 @@ def chooseAd(responses: list[rq.Response], requestSpecs: dict) -> dict:
         for seatBid in seatBids:
             bidList = seatBid.get("bid")
             for bid in bidList:
+                if (not isValidAd(bid=bid, requestSpecs=requestSpecs)):
+                    continue
                 if (bestBid is None):
                     bestBid = bid
-                elif (isNewBestAd(bid, bestBid, requestSpecs)):
+                elif (bid.get("price") > bestBid.get("price")):
+                    # Replace best with new bid, set second to old best
                     secondBest = bestBid
                     bestBid = bid
+                elif (secondBest is None or bid.get("price") > secondBest.get("price")):
+                    # Replace secondBest with new bid
+                    secondBest = bid
     
     return {
         "bestBid": bestBid,
@@ -205,13 +210,13 @@ def chargeAd(adPair: dict, requestSpecs: dict):
     burl = adPair["bestBid"].get("burl")
     # Remove price part from burl
     burlList = burl.split("?")
-    print(burlList)
+    #print(burlList)
     burl = burlList[0]
     
-    print("Charing ad...")
+    #print("Charing ad...")
     response = rq.get(url=burl, params={"price": price})
-    print(response.url)
-    print(response.status_code)
+    #print(response.url)
+    #print(response.status_code)
     
 
 def getAd(rtbRequest: str, requestSpecs: dict):
