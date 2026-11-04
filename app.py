@@ -86,9 +86,9 @@ def displayAd():
     ad = getAd(rtbRequest, requestSpecs)
     # Add ad to adLog
     addAdToLog(ad, requestSpecs)
-    print(allAdsLog)
-    print(adData)
-    print(advData)
+    #print(allAdsLog)
+    #print(adData)
+    #print(advData)
     # Display ad
     return ad
 
@@ -105,9 +105,9 @@ def handleFeedback():
         addValueToComplaint(adData, allAdsLog[auctionId].get("crid"), "complaints")
         # Update adv if ad/advertister should be blocked
         updateAdv(auctionId, advertiser)
-    print(allAdsLog)
-    print(adData)
-    print(advData)
+    #print(allAdsLog)
+    #print(adData)
+    #print(advData)
     return ('', 200)
 
 # ---- Helper functions ---- #
@@ -270,14 +270,14 @@ def updateAdv(auctionId, advertister):
         # add to block list
         print("Adding " + crid + " to block list")
         adBlockDict[crid] = "bad"
-        print(adBlockDict)
+        #print(adBlockDict)
     # If complaints for advertiser exceed 25%, add advertiser to badv
     advComplaints = advData[advertister].get("complaints")
     advTotal = advData[advertister].get("total")
     if (advComplaints / advTotal >= COMPLAINT_THRESH):
         print("Adding " + advertister + " to block list")
         badv[advertister] = "bad"
-        print(badv)
+        #print(badv)
 
 def getAdvertisterFromAd(ad: str):
     soup = BeautifulSoup(ad, "html.parser")
@@ -294,12 +294,12 @@ def addValueToComplaint(dataDict: dict, value: str, fieldToUpdate: str):
         dataDict[value] = dictToAdd
     dictToAdd[fieldToUpdate] = dictToAdd[fieldToUpdate] + 1
 
-def addAdToLog(ad: str | None, requestSpecs: dict):
-    if (ad is None):
+def addAdToLog(ad, requestSpecs: dict):
+    if (ad == ('', 200)):
         return
     soup = BeautifulSoup(ad, "html.parser")
     div = soup.div
-    print(" -- Parser --")
+    #print(" -- Parser --")
     # Get crid
     assert(div is not None)
     crid = div.get("data-crid")
