@@ -2,6 +2,7 @@ import flask
 from flask import Flask, render_template, request, make_response, redirect
 from datetime import datetime
 from pathlib import Path
+from bs4 import BeautifulSoup
 import requests as rq
 import uuid
 import psycopg
@@ -83,18 +84,34 @@ def displayAd():
     rtbRequest = formatRTBRequest(labelsArr, request, requestSpecs)
     # Handle request
     ad = getAd(rtbRequest, requestSpecs)
+    # Add ad to adLog
+    addAdToLog(ad, requestSpecs)
+    print(allAdsLog)
+    print(adData)
+    print(advData)
     # Display ad
-    if (ad is not None):
-        return ad
-    return ('', 200)
+    return ad
 
 @app.route("/ad/feedback", methods=["POST"])
 def handleFeedback():
+    rqJSON = request.get_json()
+    auctionId = rqJSON.get("auction_id")
+    event = rqJSON.get("event")
+    if (auctionId is not None and event == "complaint"):
+        # Add complaint to advertiser in advData
+        advertiser = getAdvAuctionId(auctionId)
+        addValueToComplaint(advData, advertiser, "complaints")
+        # Add complaint to ad in adData
+        addValueToComplaint(adData, allAdsLog[auctionId].get("crid"), "complaints")
+        # Update adv if ad/advertister should be blocked
+        updateAdv(auctionId, advertiser)
+    print(allAdsLog)
+    print(adData)
+    print(advData)
     return ('', 200)
 
 # ---- Helper functions ---- #
 def currTime() -> str:
-    #return datetime.now().strftime("%Y-%m-%dT%H:%M:%S:%fZ")
     time = str(datetime.now())
     return time
 
@@ -112,7 +129,7 @@ def getRTBRequestSpecs() -> dict:
         "bidFloor": 0.5,
         "width": 300,
         "height": 250,
-        "badv": []
+        "badv": list(badv.keys())
     }
 
 def formatRTBRequest(labels: list[str], request: flask.Request, requestSpecs: dict) -> str:
@@ -167,6 +184,14 @@ def isValidAd(bid, requestSpecs: dict):
         bid.get("impid") != requestSpecs.get("impid") or
         bid.get("price") < requestSpecs.get("bidFloor")):
         return False
+    # Check crid of ad is not in block list
+    #print("Checking block dict")
+    #print(adBlockDict)
+    crid = bid.get("crid")
+    for key in adBlockDict.keys():
+        if (key == crid):
+            print("Ad is in block list")
+            return False
 
     return valid
 
@@ -177,7 +202,6 @@ def chooseAd(responses: list[rq.Response], requestSpecs: dict) -> dict:
     for resp in responses:
         try:
             respDict = json.loads(resp.text)
-            #print(respDict)
         except:
             # Ad format is invalid, skip
             continue
@@ -220,10 +244,11 @@ def chargeAd(adPair: dict, requestSpecs: dict):
     bestPrice = best.get("price")
     price = min(bestPrice, max(secondBestPrice, requestSpecs["bidFloor"]) + 0.01)
     burl = best.get("burl")
-    # Remove price part from burl
+    # Edit price part from burl
     burlList = burl.split("?")
-    burl = burlList[0] + "?price=" + price
-    response = rq.get(url=burl, timeout=5)
+    burl = burlList[0] + "?price=" + str(price)
+    # Make request to burl from ad
+    rq.get(url=burl, timeout=5)
 
 def getAd(rtbRequest: str, requestSpecs: dict):
     responses = makeRTBRequest(rtbRequest)
@@ -233,7 +258,68 @@ def getAd(rtbRequest: str, requestSpecs: dict):
         chargeAd(bidPair, requestSpecs)
         return ad
     else:
-        return None
+        # Display no ad
+        return ('', 200)
+
+def updateAdv(auctionId, advertister):
+    # If complaints for ad exceed 25%, add ad to block list
+    crid = allAdsLog[auctionId].get("crid")
+    adComplaints = adData[crid].get("complaints")
+    adTotal = adData[crid].get("total")
+    if (adComplaints / adTotal >= COMPLAINT_THRESH):
+        # add to block list
+        print("Adding " + crid + " to block list")
+        adBlockDict[crid] = "bad"
+        print(adBlockDict)
+    # If complaints for advertiser exceed 25%, add advertiser to badv
+    advComplaints = advData[advertister].get("complaints")
+    advTotal = advData[advertister].get("total")
+    if (advComplaints / advTotal >= COMPLAINT_THRESH):
+        print("Adding " + advertister + " to block list")
+        badv[advertister] = "bad"
+        print(badv)
+
+def getAdvertisterFromAd(ad: str):
+    soup = BeautifulSoup(ad, "html.parser")
+    allDivs = soup.find_all("div")
+    return allDivs[1].string
+
+def addValueToComplaint(dataDict: dict, value: str, fieldToUpdate: str):
+    dictToAdd = dataDict.get(value)
+    if (dictToAdd is None):
+        dictToAdd = {
+            "total": 0,
+            "complaints": 0
+        }
+        dataDict[value] = dictToAdd
+    dictToAdd[fieldToUpdate] = dictToAdd[fieldToUpdate] + 1
+
+def addAdToLog(ad: str | None, requestSpecs: dict):
+    if (ad is None):
+        return
+    soup = BeautifulSoup(ad, "html.parser")
+    div = soup.div
+    print(" -- Parser --")
+    # Get crid
+    assert(div is not None)
+    crid = div.get("data-crid")
+    # Get advertister from second div
+    advertiser = getAdvertisterFromAd(ad)
+    # Add ad details to adLog
+    id = requestSpecs.get("id")
+    adLogDict = allAdsLog.get(id)
+    if (adLogDict is None):
+        adLogDict = {
+            "advertiser": advertiser,
+            "crid": crid
+        }
+        allAdsLog[id] = adLogDict
+    addValueToComplaint(adData, crid, "total")
+    addValueToComplaint(advData, advertiser, "total")
+    
+
+def getAdvAuctionId(auctionId) -> str:
+    return allAdsLog[auctionId].get("advertiser")
 
 def addRequest(request) -> None:
     # Don't add request if id not initialized yet
@@ -394,5 +480,37 @@ if __name__ == "__main__":
         file.close()
 
     classifier = cs.Classifier()
+    badv = {} # keys = bad advertisers
+    adBlockDict = {} # keys = bad ads (key=crid)
+    allAdsLog = {} # Log of all ads put on page
+    COMPLAINT_THRESH = 0.25
+
+    ''' Example
+    adData = {
+        "b-3d8714d28f32741f": {
+            "advertiser": "medigapplus.example"
+            "crid": "cr-ce01430636"
+        } 
+    }
+    '''
+    advData = {} # Advertiser complaint data
+    ''' Example
+    advData = {
+        "medigapplus.example": {
+            "total": 0
+            "complaints": 0
+        }
+    }
+    '''
+
+    adData = {} # Ad complaint data
+    ''' Example
+    adData = {
+        "cr-ce01430636": {
+            "total": 0
+            "complaints": 0
+        }
+    }
+    '''
 
     app.run(host="0.0.0.0", port=8000, debug=True)

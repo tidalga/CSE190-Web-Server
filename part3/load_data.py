@@ -171,7 +171,13 @@ def fitModel(matrix):
         models[key] = model
 
 def reverseMap(key: str, value: int):
-    return str(REVERSE_MAPPING[key][value])
+    innerDict = REVERSE_MAPPING.get(key)
+    if (innerDict is None):
+        return "unknown"
+    reverseMap = innerDict.get(value)
+    if (reverseMap is None):
+        return "unknown"
+    return str(reverseMap)
 
 def segmentsMap(key: str):
     return SEGMENTS_MAPPING[key]
@@ -181,6 +187,7 @@ def remapPredictions(predictions: dict):
         value = predictions.get(label)
         if value is not None:
             # Replaces value of list with single string
+            # value = single-value list, get elem
             predictions[label] = reverseMap(label, value[0])
 
 def savePredictions(users: pd.DataFrame):
@@ -228,6 +235,7 @@ def trainModel(vectorizer: TfidfVectorizer, users: pd.DataFrame, labels: pd.Data
 
 def predictLabels(vectorizer: TfidfVectorizer, models: dict[str, LogisticRegression], allSearches: list[str]):
     #print("-- Predicting labels... --")
+    predictions = {}
     matrix = vectorizer.transform(allSearches)
 
     # Make prediction of each attribute, add to dict
