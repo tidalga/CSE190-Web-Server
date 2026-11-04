@@ -84,7 +84,9 @@ def displayAd():
     # Handle request
     ad = getAd(rtbRequest, requestSpecs)
     # Display ad
-    return ad
+    if (ad is not None):
+        return ad
+    return ('', 200)
 
 # ---- Helper functions ---- #
 def currTime() -> str:
@@ -101,7 +103,7 @@ def extractSearches(userHistory: list[dict]) -> list[str]:
 
 def getRTBRequestSpecs() -> dict:
     return {
-        "id": "6c1f0e0a9d6b4f51",
+        "id": str(uuid.uuid4()),
         "impid": "1",
         "bidFloor": 0.5,
         "width": 300,
@@ -140,10 +142,15 @@ def makeRTBRequest(rtbRequest: str) -> list:
     responses = []
 
     for dsp in dsps:
-        response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, timeout=0.25)
-        if (response is None or response.status_code == 204):
-            continue # Don't add to array
-        responses.append(response)
+        try:
+            response = rq.post("https://webtracking.sysnet.ucsd.edu/pa1/rtb/" + dsp + "/bid", rtbRequest, timeout=0.25)
+            if (response is None or response.status_code == 204):
+                continue # Don't add to array
+            responses.append(response)
+        except rq.exceptions.Timeout:
+            # Ignore if request time passes
+            continue
+        
 
     return responses
 
@@ -207,14 +214,14 @@ def chargeAd(adPair: dict, requestSpecs: dict):
 
     bestPrice = best.get("price")
     price = min(bestPrice, max(secondBestPrice, requestSpecs["bidFloor"]) + 0.01)
-    burl = adPair["bestBid"].get("burl")
+    burl = best.get("burl")
     # Remove price part from burl
     burlList = burl.split("?")
     #print(burlList)
     burl = burlList[0]
     
     #print("Charing ad...")
-    response = rq.get(url=burl, params={"price": price})
+    response = rq.get(url=burl, params={"price": price}, timeout=5)
     #print(response.url)
     #print(response.status_code)
     
