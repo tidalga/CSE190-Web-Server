@@ -88,6 +88,10 @@ def displayAd():
         return ad
     return ('', 200)
 
+@app.route("/ad/feedback", methods=["POST"])
+def handleFeedback():
+    return ('', 200)
+
 # ---- Helper functions ---- #
 def currTime() -> str:
     #return datetime.now().strftime("%Y-%m-%dT%H:%M:%S:%fZ")
@@ -107,7 +111,8 @@ def getRTBRequestSpecs() -> dict:
         "impid": "1",
         "bidFloor": 0.5,
         "width": 300,
-        "height": 250
+        "height": 250,
+        "badv": []
     }
 
 def formatRTBRequest(labels: list[str], request: flask.Request, requestSpecs: dict) -> str:
@@ -133,7 +138,7 @@ def formatRTBRequest(labels: list[str], request: flask.Request, requestSpecs: di
             }]
         },
         "tmax": 250,
-        "badv": []
+        "badv": requestSpecs["badv"]
     }
     return json.dumps(rtbRequest)
 
@@ -217,14 +222,8 @@ def chargeAd(adPair: dict, requestSpecs: dict):
     burl = best.get("burl")
     # Remove price part from burl
     burlList = burl.split("?")
-    #print(burlList)
-    burl = burlList[0]
-    
-    #print("Charing ad...")
-    response = rq.get(url=burl, params={"price": price}, timeout=5)
-    #print(response.url)
-    #print(response.status_code)
-    
+    burl = burlList[0] + "?price=" + price
+    response = rq.get(url=burl, timeout=5)
 
 def getAd(rtbRequest: str, requestSpecs: dict):
     responses = makeRTBRequest(rtbRequest)
