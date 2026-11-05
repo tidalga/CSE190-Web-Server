@@ -82,6 +82,8 @@ def displayAd():
     # Format OpenRTB request
     requestSpecs = getRTBRequestSpecs()
     rtbRequest = formatRTBRequest(labelsArr, request, requestSpecs)
+    print("-- RTB Request --")
+    print(rtbRequest)
     # Handle request
     ad = getAd(rtbRequest, requestSpecs)
     # Add ad to adLog
@@ -133,6 +135,8 @@ def getRTBRequestSpecs() -> dict:
     }
 
 def formatRTBRequest(labels: list[str], request: flask.Request, requestSpecs: dict) -> str:
+    print(" -- Labels -- ")
+    print(labels)
     rtbRequest = {
         "id": requestSpecs["id"],
         "imp": [{
@@ -486,7 +490,7 @@ if __name__ == "__main__":
     COMPLAINT_THRESH = 0.25
 
     ''' Example
-    adData = {
+    allAdsLog = {
         "b-3d8714d28f32741f": {
             "advertiser": "medigapplus.example"
             "crid": "cr-ce01430636"

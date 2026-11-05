@@ -24,7 +24,6 @@ class Classifier:
             label = labels[attr]
             if (label == "unknown"):
                 continue
-
-            prepedLabels.append({"id": ld.segmentsMap(label)})
+            prepedLabels.append({"id": ld.segmentsMap(attr, label)})
 
         return prepedLabels
